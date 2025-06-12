@@ -1,6 +1,7 @@
 import asyncio
 import random
 import json
+import os
 from datetime import datetime, timedelta
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional
@@ -375,28 +376,66 @@ Choose your role and start building your racing empire! 🏆
     
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
+# Error handler
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log the error and send a telegram message to notify the developer."""
+    logging.error(msg="Exception while handling an update:", exc_info=context.error)
+
 # Main Bot Setup
 async def main():
-    # Replace with your bot token from BotFather
-    BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+    # Get bot token from environment variable
+    BOT_TOKEN = os.getenv("BOT_TOKEN")
+    if not BOT_TOKEN:
+        raise ValueError("BOT_TOKEN environment variable is required")
     
-    application = Application.builder().token(BOT_TOKEN).build()
-    
-    # Command handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("profile", profile))
-    application.add_handler(CommandHandler("horses", horses))
-    application.add_handler(CommandHandler("market", market))
-    application.add_handler(CommandHandler("tracks", tracks))
-    application.add_handler(CommandHandler("race", race))
-    application.add_handler(CommandHandler("help", help_command))
-    
-    # Callback handlers
-    application.add_handler(CallbackQueryHandler(button_callback))
-    
-    # Start the bot
-    print("🏇 Horse Racing Bot starting...")
-    await application.run_polling()
+    try:
+        application = Application.builder().token(BOT_TOKEN).build()
+        
+        # Command handlers
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("profile", profile))
+        application.add_handler(CommandHandler("horses", horses))
+        application.add_handler(CommandHandler("market", market))
+        application.add_handler(CommandHandler("tracks", tracks))
+        application.add_handler(CommandHandler("race", race))
+        application.add_handler(CommandHandler("help", help_command))
+        
+        # Callback handlers
+        application.add_handler(CallbackQueryHandler(button_callback))
+        
+        # Error handler
+        application.add_error_handler(error_handler)
+        
+        # Initialize and start
+        await application.initialize()
+        await application.start()
+        
+        # Start the bot
+        print("🏇 Horse Racing Bot starting...")
+        await application.run_polling(stop_signals=None)
+        
+    except Exception as e:
+        logging.error(f"Error starting bot: {e}")
+        raise
+    finally:
+        # Cleanup
+        if 'application' in locals():
+            await application.stop()
+            await application.shutdown()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except RuntimeError as e:
+        if "This event loop is already running" in str(e):
+            # Fallback for environments with existing event loops
+            import nest_asyncio
+            nest_asyncio.apply()
+            asyncio.run(main())
+        else:
+            raise
+    except KeyboardInterrupt:
+        print("Bot stopped by user")
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        raise
